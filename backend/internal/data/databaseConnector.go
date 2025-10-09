@@ -1,23 +1,22 @@
-package database
+package data
 
 import (
 	"database/sql"
 	"fmt"
-	"sync"
+	"log"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/sqlite"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "modernc.org/sqlite"
 )
-
-var once sync.Once
 
 type DatabaseConnector struct {
 	db *sql.DB
 }
 
-var database *DatabaseConnector
-
-func newDatabaseConnector() *DatabaseConnector {
-	db, err := sql.Open("sqlite", "pathtodb")
+func NewDatabaseConnector(driver, dbPath, migrationPath string) *DatabaseConnector {
+	db, err := sql.Open(driver, dbPath)
 	if err != nil {
 		fmt.Println(err)
 		// Handle error
@@ -29,20 +28,20 @@ func newDatabaseConnector() *DatabaseConnector {
 		// Handle error
 	}
 
+	m, err := migrate.New(
+		"file://"+migrationPath,
+		driver+"://"+dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		log.Fatal(err)
+	}
 	// connected
 	return &DatabaseConnector{
 		db: db,
 	}
-}
-
-func GetInstance() *DatabaseConnector {
-	if database != nil {
-		return database
-	}
-	once.Do(func() {
-		database = newDatabaseConnector()
-	})
-	return database
 }
 
 func (dbConnector *DatabaseConnector) Query(query string) *sql.Rows {
@@ -54,30 +53,22 @@ func (dbConnector *DatabaseConnector) Query(query string) *sql.Rows {
 	return rows
 }
 
-func (dbConnector *DatabaseConnector) InsertQuery(query string, idQuery string) (int, error) {
-	err := dbConnector.ExecuteQuery(query)
+func (dbConnector *DatabaseConnector) InsertQuery(query string) (int64, error) {
+	result, err := dbConnector.ExecuteQuery(query)
 	if err != nil {
 		fmt.Println(err)
 		return 0, err
 	}
-	var lastInsertedId int
-	if idQuery != "" {
-		err = dbConnector.db.QueryRow(idQuery).Scan(&lastInsertedId)
-		if err != nil {
-			fmt.Println(err)
-			return 0, err
-		}
-	}
-	return lastInsertedId, err
+	return result.LastInsertId()
 }
 
-func (dbConnector *DatabaseConnector) ExecuteQuery(query string) error {
-	_, err := dbConnector.db.Exec(query)
+func (dbConnector *DatabaseConnector) ExecuteQuery(query string) (sql.Result, error) {
+	result, err := dbConnector.db.Exec(query)
 	if err != nil {
 		fmt.Println(err)
-		return err
+		return nil, err
 	}
-	return nil
+	return result, err
 }
 
 func (dbConnector *DatabaseConnector) PrepareQuery(query string) (*sql.Stmt, error) {

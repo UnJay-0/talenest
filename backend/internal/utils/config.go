@@ -9,8 +9,9 @@ import (
 )
 
 type Config struct {
-	SQLitePath string `mapstructure:"sqlite_path"`
-	DuckDBpath string `mapstructure:"sqlite_path"`
+	SQLitePath           string `mapstructure:"sqlite_path"`
+	DuckDBpath           string `mapstructure:"duckdb_path"`
+	SQLiteMigrationsPath string `mapstructure:"sqlite_migrations_path"`
 }
 
 func GetAppDataPath(filename string) string {
@@ -47,6 +48,8 @@ func LoadConfig() *Config {
 
 	viper.SetDefault("sqlite_path", filepath.Join(appDir, "data", "talenest.db"))
 	viper.SetDefault("duckdb_path", filepath.Join(appDir, "data", "talenest_analytics.duckdb"))
+	//TODO: See if it reacheable after bundling
+	viper.SetDefault("sqlite_migrations_path", filepath.Join("backend", "internal", "data", "migrations"))
 
 	if err := viper.ReadInConfig(); err != nil {
 		// If missing, write defaults
