@@ -9,7 +9,8 @@ import (
 	"time"
 )
 
-const taleTableName = "tales"
+const tableName = "tales"
+const READ_BY_PARENT_STATEMENT = "READ_BY_PARENT"
 
 type Repository interface {
 	Create(tale *Tale) (int, error)
@@ -22,13 +23,8 @@ type Repository interface {
 }
 
 type taleRepository struct {
-	dbConn             *data.DatabaseConnector
-	statements         map[string]*sql.Stmt
-	readByIdStmt       *sql.Stmt
-	readByParentIdStmt *sql.Stmt
-	readAllStmt        *sql.Stmt
-	updateStmt         *sql.Stmt
-	deleteStmt         *sql.Stmt
+	dbConn     *data.DatabaseConnector
+	statements map[string]*sql.Stmt
 }
 
 func NewRepository(dbConn *data.DatabaseConnector) (Repository, error) {
@@ -38,48 +34,53 @@ func NewRepository(dbConn *data.DatabaseConnector) (Repository, error) {
 	var err error
 
 	// Prepare statements only once (better perf + safety)
-	createStmt, err := dbConn.PrepareQuery(createQuery())
+	createStmt, err := dbConn.PrepareQuery(
+		data.CreateQuery(tableName, getColumnNames()))
 	if err != nil {
 		return nil, err
 	}
 	repo.statements = make(map[string]*sql.Stmt)
-	repo.statements["create"] = createStmt
+	repo.statements[data.CREATE_STATEMENT] = createStmt
 
-	readByIdStmt, err := dbConn.PrepareQuery(readByIdQuery())
+	readByIdStmt, err := dbConn.PrepareQuery(
+		data.ReadByIdQuery(tableName, getColumnNames()))
 	if err != nil {
 		return nil, err
 	}
-	repo.statements["readById"] = readByIdStmt
+	repo.statements[data.READ_STATEMENT] = readByIdStmt
 
 	readByParentIdStmt, err := dbConn.PrepareQuery(readByParentIdQuery())
 	if err != nil {
 		return nil, err
 	}
-	repo.statements["readByParentId"] = readByParentIdStmt
+	repo.statements[READ_BY_PARENT_STATEMENT] = readByParentIdStmt
 
-	readAllStmt, err := dbConn.PrepareQuery(readAllQuery())
+	readAllStmt, err := dbConn.PrepareQuery(
+		data.ReadAllQuery(tableName, getColumnNames()))
 	if err != nil {
 		return nil, err
 	}
-	repo.statements["readAll"] = readAllStmt
+	repo.statements[data.READ_ALL_STATEMENT] = readAllStmt
 
-	updateStmt, err := dbConn.PrepareQuery(updateQuery())
+	updateStmt, err := dbConn.PrepareQuery(
+		data.UpdateQuery(tableName, getColumnNames()))
 	if err != nil {
 		return nil, err
 	}
-	repo.statements["update"] = updateStmt
+	repo.statements[data.UPDATE_STATEMENT] = updateStmt
 
-	deleteStmt, err := dbConn.PrepareQuery(deleteQuery())
+	deleteStmt, err := dbConn.PrepareQuery(
+		data.DeleteQuery(tableName))
 	if err != nil {
 		return nil, err
 	}
 
-	repo.statements["delete"] = deleteStmt
+	repo.statements[data.DELETE_STATEMENT] = deleteStmt
 
 	return repo, nil
 }
 
-func getTalesColumnNames() []string {
+func getColumnNames() []string {
 	return []string{
 		"id",
 		"name",
@@ -92,25 +93,8 @@ func getTalesColumnNames() []string {
 	}
 }
 
-func getTalesColumns() []data.Column {
-	columns := []data.Column{}
-	for _, columnName := range getTalesColumnNames() {
-		column, _ := data.NewColumn(columnName, "")
-		columns = append(columns, *column)
-	}
-	return columns
-}
-
-func createQuery() string {
-	builder := data.NewInsertQueryBuilder(taleTableName)
-	builder.SetColumns(getTalesColumns())
-	builder.SetValues(data.GetTokens(len(getTalesColumnNames()), "?"))
-	queryStr, _ := builder.Build()
-	return queryStr
-}
-
 func (repo taleRepository) Create(tale *Tale) (int, error) {
-	result, err := repo.statements["create"].Exec(
+	result, err := repo.statements[data.CREATE_STATEMENT].Exec(
 		nil,
 		tale.Name,
 		tale.Summary,
@@ -128,16 +112,8 @@ func (repo taleRepository) Create(tale *Tale) (int, error) {
 	return tale.Id, err
 }
 
-func readByIdQuery() string {
-	builder := data.NewSelectQueryBuilder(taleTableName)
-	builder.SetColumns(getTalesColumns())
-	idColumn, _ := data.NewColumn("id", "")
-	builder.SetWhere(taleTableName, *idColumn, "=", data.NewTokenValue("?"), "")
-	return builder.Build()
-}
-
 func (repo taleRepository) ReadById(id int) (*Tale, error) {
-	rows, err := repo.statements["readById"].Query(id)
+	rows, err := repo.statements[data.READ_STATEMENT].Query(id)
 	defer rows.Close()
 	if err != nil {
 		return &Tale{}, err
@@ -204,30 +180,24 @@ func (repo taleRepository) readTales(rows *sql.Rows) (*Tales, error) {
 }
 
 func readByParentIdQuery() string {
-	builder := data.NewSelectQueryBuilder(taleTableName)
-	builder.SetColumns(getTalesColumns())
+	builder := data.NewSelectQueryBuilder(tableName)
+	builder.SetColumns(data.ConvertToColumns(getColumnNames()))
 	parentIdColumn, _ := data.NewColumn("parent_id", "")
-	builder.SetWhere(taleTableName, *parentIdColumn, "=", data.NewTokenValue("?"), "")
+	builder.SetWhere(tableName, *parentIdColumn, "=", data.NewTokenValue("?"), "")
 	return builder.Build()
 }
 
 func (repo taleRepository) ReadByParentId(parentId int) (*Tales, error) {
-	rows, err := repo.statements["readByParentId"].Query(parentId)
+	rows, err := repo.statements[READ_BY_PARENT_STATEMENT].Query(parentId)
 	defer rows.Close()
 	if err != nil {
 		return &Tales{}, err
 	}
 	return repo.readTales(rows)
-}
-
-func readAllQuery() string {
-	builder := data.NewSelectQueryBuilder(taleTableName)
-	builder.SetColumns(getTalesColumns())
-	return builder.Build()
 }
 
 func (repo taleRepository) ReadAll() (*Tales, error) {
-	rows, err := repo.statements["readAll"].Query()
+	rows, err := repo.statements[data.READ_ALL_STATEMENT].Query()
 	defer rows.Close()
 	if err != nil {
 		return &Tales{}, err
@@ -235,47 +205,46 @@ func (repo taleRepository) ReadAll() (*Tales, error) {
 	return repo.readTales(rows)
 }
 
-func updateQuery() string {
-	// skip id
-	builder := data.NewUpdateQueryBuilder(taleTableName)
-	builder.SetNewValues(getTalesColumns(), data.GetTokens(len(getTalesColumnNames()), "?"))
-	idCol, _ := data.NewColumn("id", "")
-	builder.SetWhere(taleTableName, *idCol, "=", data.NewTokenValue("?"), "")
-	return builder.Build()
-}
-
 func (repo taleRepository) Update(tale Tale) error {
-	result, err := repo.statements["update"].Exec(
-		tale.Id,
-		tale.Name,
-		tale.Summary,
-		tale.ParentId,
-		tale.Status.Id,
-		tale.created,
-		utils.CleanTime(time.Now()),
-		tale.deleted,
-		tale.Id,
-	)
+	var result sql.Result
+	var err error
+	if !tale.deleted.IsZero() {
+		result, err = repo.statements[data.UPDATE_STATEMENT].Exec(
+			tale.Id,
+			tale.Name,
+			tale.Summary,
+			tale.ParentId,
+			tale.Status.Id,
+			utils.CleanTime(tale.created),
+			utils.CleanTime(time.Now()),
+			utils.CleanTime(tale.deleted),
+			tale.Id,
+		)
+	} else {
+		result, err = repo.statements[data.UPDATE_STATEMENT].Exec(
+			tale.Id,
+			tale.Name,
+			tale.Summary,
+			tale.ParentId,
+			tale.Status.Id,
+			utils.CleanTime(tale.created),
+			utils.CleanTime(time.Now()),
+			nil,
+			tale.Id,
+		)
+	}
 	if err != nil {
 		return err
 	}
 	if nRows, err := result.RowsAffected(); nRows != 1 || err != nil {
-		fmt.Println(nRows, err)
 		return errors.New("The rows affected are different than 1")
 	}
 	return nil
 }
 
-func deleteQuery() string {
-	builder := data.NewDeleteQueryBuilder(taleTableName)
-	idCol, _ := data.NewColumn("id", "")
-	builder.SetWhere(taleTableName, *idCol, "=", data.NewTokenValue("?"), "")
-	return builder.Build()
-}
-
 func (repo taleRepository) Delete(id int) error {
 	// permanent delete
-	_, err := repo.statements["delete"].Exec(id)
+	_, err := repo.statements[data.DELETE_STATEMENT].Exec(id)
 	return err
 }
 

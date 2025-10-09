@@ -1,5 +1,7 @@
 package status
 
+import "fmt"
+
 type Status struct {
 	Id    int
 	Name  string
@@ -18,6 +20,10 @@ func (status Status) GetColor() string {
 	return status.color
 }
 
-func (Status) SetColor(color string) {
+func (status Status) SetColor(color string) {
 
+}
+
+func (status Status) String() string {
+	return fmt.Sprintf("status: %s, %s", status.Name, status.color)
 }

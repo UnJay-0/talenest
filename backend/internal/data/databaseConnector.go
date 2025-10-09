@@ -53,8 +53,8 @@ func (dbConnector *DatabaseConnector) Query(query string) *sql.Rows {
 	return rows
 }
 
-func (dbConnector *DatabaseConnector) InsertQuery(query string) (int64, error) {
-	result, err := dbConnector.ExecuteQuery(query)
+func (dbConnector *DatabaseConnector) InsertQuery(query string, args ...Value) (int64, error) {
+	result, err := dbConnector.ExecuteQuery(query, args)
 	if err != nil {
 		fmt.Println(err)
 		return 0, err
@@ -62,8 +62,8 @@ func (dbConnector *DatabaseConnector) InsertQuery(query string) (int64, error) {
 	return result.LastInsertId()
 }
 
-func (dbConnector *DatabaseConnector) ExecuteQuery(query string) (sql.Result, error) {
-	result, err := dbConnector.db.Exec(query)
+func (dbConnector *DatabaseConnector) ExecuteQuery(query string, args ...[]Value) (sql.Result, error) {
+	result, err := dbConnector.db.Exec(query, args)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
@@ -77,5 +77,5 @@ func (dbConnector *DatabaseConnector) PrepareQuery(query string) (*sql.Stmt, err
 		// TODO: Handle error
 		fmt.Printf("Error preparing query: %v\n", err)
 	}
-	return statement, err
+	return statement, nil
 }

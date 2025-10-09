@@ -1,13 +1,16 @@
 package data
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"strconv"
+	"talenest/backend/internal/utils"
 	"time"
 )
 
 type Value interface {
 	GetValueString() string
+	Value() (driver.Value, error)
 }
 
 type IntValue struct {
@@ -28,6 +31,10 @@ func (value *IntValue) String() string {
 	return value.GetValueString()
 }
 
+func (value *IntValue) Value() (driver.Value, error) {
+	return value.val, nil
+}
+
 type FloatValue struct {
 	val float32
 }
@@ -44,6 +51,10 @@ func (value *FloatValue) GetValueString() string {
 
 func (value *FloatValue) String() string {
 	return value.GetValueString()
+}
+
+func (value *FloatValue) Value() (driver.Value, error) {
+	return value.val, nil
 }
 
 type StringValue struct {
@@ -64,6 +75,10 @@ func (value *StringValue) String() string {
 	return value.GetValueString()
 }
 
+func (value *StringValue) Value() (driver.Value, error) {
+	return value.val, nil
+}
+
 type TokenValue struct {
 	token string
 }
@@ -82,6 +97,18 @@ func (value *TokenValue) String() string {
 	return value.GetValueString()
 }
 
+func (value *TokenValue) Value() (driver.Value, error) {
+	return value.token, nil
+}
+
+func GetTokens(number int, symbol string) []Value {
+	tokens := []Value{}
+	for i := 0; i < number; i++ {
+		tokens = append(tokens, NewTokenValue(symbol))
+	}
+	return tokens
+}
+
 type TimeValue struct {
 	val time.Time
 }
@@ -93,9 +120,13 @@ func NewTimeValue(val time.Time) *TimeValue {
 }
 
 func (value *TimeValue) GetValueString() string {
-	return fmt.Sprintf("'%s'", value.val.Format("2006-01-02 15:04:05"))
+	return fmt.Sprintf("'%s'", value.val.Format(utils.DATETIME_FORMAT))
 }
 
 func (value *TimeValue) String() string {
 	return value.GetValueString()
+}
+
+func (value *TimeValue) Value() (driver.Value, error) {
+	return value.val, nil
 }

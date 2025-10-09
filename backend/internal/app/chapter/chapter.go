@@ -1,10 +1,14 @@
 package chapter
 
-import "talenest/backend/internal/app/tales"
+import "fmt"
 
 type Chapter struct {
-	id        int
-	content   string
+	Id        int
+	Content   string
 	sentiment float64
-	tale      tales.Tale
+	TaleId    int
+}
+
+func (chapter *Chapter) String() string {
+	return fmt.Sprintf("Chapter %d [%d]:\n%s\n", chapter.Id, chapter.TaleId, chapter.Content)
 }
